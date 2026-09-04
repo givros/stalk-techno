@@ -796,17 +796,6 @@ function chooseElevatorTarget(runtime: ElevatorRuntime) {
   return null;
 }
 
-function flattenElevatorBlocks(
-  blocks: ElevatorInstruction[],
-): ElevatorInstruction[] {
-  return blocks.flatMap((block) => [
-    block,
-    ...(block.kind === 'repeat'
-      ? flattenElevatorBlocks(block.children ?? [])
-      : []),
-  ]);
-}
-
 function sanitizeEnergyAssignments(
   value: unknown,
 ): Record<string, EnergyCategory> {
@@ -3205,88 +3194,7 @@ export default function Home() {
     const initialRequests = Array.from(
       new Set([...elevatorRequests, ...elevatorServed]),
     );
-    if (initialRequests.length === 0) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'Appuyez sur des étages avant de lancer.',
-      });
-      return;
-    }
-
-    const allBlocks = flattenElevatorBlocks(elevatorProgram);
-    const hasUsableLoop = allBlocks.some(
-      (block) => block.kind === 'repeat' && (block.children?.length ?? 0) >= 2,
-    );
-    const hasActionInsideLoop = (
-      blocks: ElevatorInstruction[],
-      action: ElevatorAction,
-    ): boolean =>
-      blocks.some(
-        (block) =>
-          block.kind === 'repeat' &&
-          ((block.children ?? []).some((child) => child.kind === action) ||
-            hasActionInsideLoop(block.children ?? [], action)),
-      );
-    const hasChooseInLoop = hasActionInsideLoop(elevatorProgram, 'choose-next');
-    const hasOpen = allBlocks.some((block) => block.kind === 'open-doors');
-    const hasClose = allBlocks.some((block) => block.kind === 'close-doors');
-    const hasUpLogic = allBlocks.some(
-      (block) =>
-        block.kind === 'if' &&
-        block.condition === 'request-above' &&
-        (block.thenAction === 'move-up' || block.elseAction === 'move-up'),
-    );
-    const hasDownLogic = allBlocks.some(
-      (block) =>
-        block.kind === 'if' &&
-        block.condition === 'request-below' &&
-        (block.thenAction === 'move-down' || block.elseAction === 'move-down'),
-    );
-    const hasHereLogic = allBlocks.some(
-      (block) =>
-        block.kind === 'if' &&
-        block.condition === 'request-here' &&
-        (block.thenAction === 'open-doors' ||
-          block.elseAction === 'open-doors'),
-    );
-
-    if (!hasUsableLoop) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'Ajoutez une boucle avec plusieurs blocs.',
-      });
-      return;
-    }
-    if (!hasChooseInLoop) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'La boucle doit choisir le prochain arrêt.',
-      });
-      return;
-    }
-    if (!hasOpen || !hasClose) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'Le programme doit ouvrir et fermer les portes.',
-      });
-      return;
-    }
-    if (!hasUpLogic || !hasDownLogic || !hasHereLogic) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'Ajoutez les SI pour monter, descendre et ouvrir.',
-      });
-      return;
-    }
-
     const steps = expandElevatorProgram(elevatorProgram);
-    if (steps.length === 0) {
-      setElevatorFeedback({
-        tone: 'error',
-        message: 'Ajoutez des blocs dans la boucle.',
-      });
-      return;
-    }
 
     const currentRun = elevatorRunId.current + 1;
     elevatorRunId.current = currentRun;
