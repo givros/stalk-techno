@@ -34,8 +34,12 @@ jobs:
       - name: Build the static site
         env:
           STATIC_EXPORT: 'true'
-          BASE_PATH: /stalk-techno/
         run: npm run build
+
+      - name: Make asset URLs portable on GitHub Pages
+        run: |
+          find dist/client -type f \( -name '*.html' -o -name '*.js' -o -name '*.css' -o -name '*.json' \) \
+            -exec sed -i 's#/_next/#./_next/#g' {} +
 
       - name: Add a Pages fallback for direct navigation
         run: cp dist/client/index.html dist/client/404.html
