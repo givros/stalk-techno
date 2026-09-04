@@ -1005,20 +1005,6 @@ function isWallAhead(robot: RobotState, maze: MazeVariant) {
   );
 }
 
-function isDoorAhead(robot: RobotState, maze: MazeVariant) {
-  const [rowDelta, colDelta] = getDirectionDelta(robot.direction);
-  const nextRow = robot.row + rowDelta;
-  const nextCol = robot.col + colDelta;
-
-  return (
-    nextRow >= 0 &&
-    nextRow < GRID_SIZE &&
-    nextCol >= 0 &&
-    nextCol < GRID_SIZE &&
-    getCell(maze, nextRow, nextCol).kind === 'door'
-  );
-}
-
 function evaluateCondition(
   robot: RobotState,
   maze: MazeVariant,
@@ -3479,52 +3465,8 @@ export default function Home() {
 
   const executeProgram = () => {
     if (isRunning) return;
-    if (program.length === 0) {
-      setFeedback({ tone: 'error', message: 'Le programme est vide.' });
-      return;
-    }
-    if (program.length > MAX_BLOCKS) {
-      setFeedback({
-        tone: 'error',
-        message: 'Limite dépassée : retirez des blocs.',
-      });
-      return;
-    }
-
-    if (
-      !program.some(
-        (block) =>
-          block.kind === 'repeat' &&
-          block.command === 'advance' &&
-          (block.count ?? 0) > 1,
-      )
-    ) {
-      setFeedback({
-        tone: 'error',
-        message: 'Ajoutez une boucle RÉPÉTER pour avancer.',
-      });
-      return;
-    }
-    if (
-      !program.some(
-        (block) => block.kind === 'if' && block.condition === 'has-key',
-      )
-    ) {
-      setFeedback({
-        tone: 'error',
-        message: 'Ajoutez un SI pour vérifier la clé.',
-      });
-      return;
-    }
 
     const steps = expandProgram(program);
-    if (steps.length === 0) {
-      setFeedback({
-        tone: 'error',
-        message: 'Ajoutez au moins une instruction.',
-      });
-      return;
-    }
 
     const currentRun = runId.current + 1;
     runId.current = currentRun;
@@ -3539,7 +3481,6 @@ export default function Home() {
 
     let cursor = 0;
     let current: RobotState = initialRobot;
-    let conditionalKeyCheckUsed = false;
 
     const finish = (next: RobotState, success: boolean, message: string) => {
       if (runId.current !== currentRun) return;
@@ -3578,12 +3519,6 @@ export default function Home() {
         ) {
           if (!current.collected.includes('key')) {
             finish(current, false, 'La porte est verrouillée sans la clé.');
-          } else if (!conditionalKeyCheckUsed) {
-            finish(
-              current,
-              false,
-              'Utilisez SI pour vérifier la clé avant la porte.',
-            );
           } else {
             finish(current, true, 'Trajet valide. Passage à l’épreuve 03…');
           }
@@ -3615,14 +3550,6 @@ export default function Home() {
           step.condition,
         );
         command = conditionMet ? step.thenCommand : step.elseCommand;
-        if (
-          step.condition === 'has-key' &&
-          conditionMet &&
-          command === 'advance' &&
-          isDoorAhead(current, activeMaze)
-        ) {
-          conditionalKeyCheckUsed = true;
-        }
       } else {
         command = step.command;
       }
