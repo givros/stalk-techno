@@ -1,11 +1,16 @@
 import { LabExtension } from './lab-extension.mjs';
 import { buildLabProject } from './templates.mjs';
 import { createLabBridge } from './bridge.mjs';
+import { countProjectBlocks } from './program-metrics.mjs';
 
 const params = new URLSearchParams(location.search);
 const mode = ['maze', 'elevator'].includes(params.get('mode'))
   ? params.get('mode')
   : 'free';
+const isOptimization =
+  mode === 'maze' && params.get('challenge') === 'maze-optimization';
+const projectKey = isOptimization ? 'maze-optimization' : mode;
+const blockLimit = 10;
 const loading = document.getElementById('scratch-loading');
 const host = document.getElementById('scratch-editor');
 if (mode !== 'free' && params.get('embedded') === '1') {
@@ -13,17 +18,68 @@ if (mode !== 'free' && params.get('embedded') === '1') {
 }
 let ready = false;
 let saveTimer;
-let saving = false;
+let saveTask = null;
 let dirty = false;
 let extension;
 let vm;
 let db;
+let blockCount = 0;
+let runBlockCount = null;
+let challengeFeedback = '';
+let arrivalHandled = false;
+let arrivalTimer;
+let runVersion = 0;
 const bridge = createLabBridge(
   window,
   mode,
   () => extension,
   () => ready,
+  () => (isOptimization ? { blockCount, challengeFeedback } : {}),
 );
+
+function updateBlockCount() {
+  if (!isOptimization) return;
+  blockCount = countProjectBlocks(vm);
+  if (runBlockCount !== null) {
+    // Removing blocks during a run must not lower that run's score.
+    runBlockCount = Math.max(runBlockCount, blockCount);
+  }
+}
+
+function handleOptimizedMaze(simulation) {
+  if (!isOptimization || !ready) return;
+  updateBlockCount();
+  if (!simulation.completed) {
+    arrivalHandled = false;
+    return;
+  }
+  if (arrivalHandled) return;
+  arrivalHandled = true;
+
+  const accepted = runBlockCount !== null && runBlockCount <= blockLimit;
+  challengeFeedback =
+    runBlockCount === null
+      ? 'Relancez le programme avec le drapeau pour valider le parcours.'
+      : accepted
+        ? ''
+        : `Sortie atteinte avec ${runBlockCount} blocs. Réduisez à ${blockLimit} maximum, puis relancez le programme.`;
+
+  const finishedRun = runVersion;
+  // Let the current command register its animation before stopping at the exit.
+  arrivalTimer = setTimeout(async () => {
+    vm.stopAll();
+    bridge.publishState();
+    await save();
+    if (
+      accepted &&
+      runVersion === finishedRun &&
+      arrivalHandled &&
+      simulation.completed
+    ) {
+      bridge.notify('complete');
+    }
+  }, 0);
+}
 
 function openDatabase() {
   return new Promise((resolve, reject) => {
@@ -41,17 +97,24 @@ function readSaved() {
     const request = db
       .transaction('projects')
       .objectStore('projects')
-      .get(mode);
+      .get(projectKey);
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
   });
 }
 
-async function save() {
-  if (!ready || !db) return;
+function save() {
+  if (!ready || !db) return Promise.resolve();
   dirty = true;
-  if (saving) return;
-  saving = true;
+  if (!saveTask) {
+    saveTask = persistProject().finally(() => {
+      saveTask = null;
+    });
+  }
+  return saveTask;
+}
+
+async function persistProject() {
   try {
     while (dirty) {
       dirty = false;
@@ -59,12 +122,13 @@ async function save() {
       const record = {
         project: await blob.arrayBuffer(),
         simulation: extension?.simulation.state,
+        ...(isOptimization ? { challengeFeedback } : {}),
         title: document.title,
         updatedAt: Date.now(),
       };
       await new Promise((resolve, reject) => {
         const transaction = db.transaction('projects', 'readwrite');
-        transaction.objectStore('projects').put(record, mode);
+        transaction.objectStore('projects').put(record, projectKey);
         transaction.oncomplete = resolve;
         transaction.onerror = () => reject(transaction.error);
         transaction.onabort = () => reject(transaction.error);
@@ -78,8 +142,6 @@ async function save() {
     loading.onclick = () => {
       loading.hidden = true;
     };
-  } finally {
-    saving = false;
   }
 }
 
@@ -98,12 +160,29 @@ try {
   db = await openDatabase().catch(() => null);
   if (mode !== 'free') {
     extension = new LabExtension(vm, mode, (simulation) => {
+      handleOptimizedMaze(simulation);
       queueSave();
       bridge.publishState();
-      if (mode === 'maze' && simulation.completed) bridge.notify('complete');
+      if (mode === 'maze' && !isOptimization && simulation.completed) {
+        bridge.notify('complete');
+      }
     });
     const service = vm.extensionManager._registerInternalExtension(extension);
     vm.extensionManager._loadedExtensions.set(extension.id, service);
+    if (isOptimization) {
+      vm.runtime.on('PROJECT_START', () => {
+        clearTimeout(arrivalTimer);
+        runVersion += 1;
+        arrivalHandled = false;
+        challengeFeedback = '';
+        updateBlockCount();
+        runBlockCount = blockCount;
+        bridge.publishState();
+      });
+      vm.runtime.on('PROJECT_STOP_ALL', () => {
+        runBlockCount = null;
+      });
+    }
   }
 
   GUI.setAppElement(host);
@@ -186,6 +265,9 @@ try {
               : 1,
             hasKey: Boolean(snapshot.hasKey),
           });
+          if (isOptimization && typeof saved.challengeFeedback === 'string') {
+            challengeFeedback = saved.challengeFeedback;
+          }
         }
       }
     } catch (error) {
@@ -197,6 +279,7 @@ try {
   } else if (extension) {
     await load(JSON.stringify(await buildLabProject(vm, extension)));
   }
+  updateBlockCount();
   if (extension) {
     extension.publish();
     const controller = vm.runtime.targets.find(
@@ -207,10 +290,21 @@ try {
   ready = true;
   vm.on('PROJECT_CHANGED', queueSave);
   vm.on('PROJECT_RUN_STOP', queueSave);
+  if (isOptimization) {
+    vm.on('PROJECT_CHANGED', () => {
+      updateBlockCount();
+      bridge.publishState();
+    });
+    vm.on('PROJECT_RUN_STOP', () => {
+      runBlockCount = null;
+    });
+  }
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) void save();
   });
   window.addEventListener('pagehide', (event) => {
+    clearTimeout(arrivalTimer);
+    runVersion += 1;
     void save();
     vm.stopAll();
     if (!event.persisted) bridge.dispose();
@@ -222,6 +316,7 @@ try {
     extension,
     save,
     mode,
+    challenge: isOptimization ? 'maze-optimization' : null,
     version: '15.1.1',
   };
   loading.hidden = true;

@@ -48,7 +48,8 @@ type Screen =
   | 'challenge'
   | 'stage3'
   | 'stage4'
-  | 'stage5';
+  | 'stage5'
+  | 'stage6';
 type CommandKind = 'advance' | 'left' | 'right';
 type ActionKind = CommandKind | 'none';
 type ConditionKind =
@@ -437,6 +438,7 @@ const INITIAL_ENERGY_FEEDBACK: Feedback = {
 };
 
 const SESSION_STORAGE_KEY = 'stalk-techno-session-v2';
+const EXERCISE_SEQUENCE_VERSION = 2;
 
 const commandLabel: Record<CommandKind, string> = {
   advance: 'AVANCER',
@@ -490,7 +492,8 @@ function isScreen(value: unknown): value is Screen {
     value === 'challenge' ||
     value === 'stage3' ||
     value === 'stage4' ||
-    value === 'stage5'
+    value === 'stage5' ||
+    value === 'stage6'
   );
 }
 
@@ -1169,6 +1172,14 @@ function TeacherBypassScreen({
             onClick={() => onSelectStage('stage5')}
           >
             ÉPREUVE 5
+            <ArrowRight aria-hidden="true" />
+          </Button>
+          <Button
+            type="button"
+            size="lg"
+            onClick={() => onSelectStage('stage6')}
+          >
+            ÉPREUVE 6
             <ArrowRight aria-hidden="true" />
           </Button>
         </div>
@@ -2441,7 +2452,7 @@ function ElevatorProgramPanel({
         <div className="elevator-program-workspace">
           <div className="elevator-program-heading">
             <div>
-              <div className="palette-label">ÉPREUVE 5</div>
+              <div className="palette-label">ÉPREUVE 6</div>
               <h2 id="elevator-program-title">Programmez l’ascenseur</h2>
             </div>
             <Zap className="heading-spark" aria-hidden="true" />
@@ -2704,7 +2715,7 @@ function ElevatorChallengeScreen({
   return (
     <section
       className="elevator-layout"
-      aria-label="Épreuve 5 : programmation de l’ascenseur"
+      aria-label="Épreuve 6 : programmation de l’ascenseur"
     >
       <div className="elevator-mission-strip">
         Appelez l’ascenseur, choisissez 7, 3 et 5, puis programmez les portes et
@@ -2837,6 +2848,7 @@ export default function Home() {
         const savedSession = JSON.parse(rawSession) as {
           accessCode?: unknown;
           screen?: unknown;
+          sequenceVersion?: unknown;
           program?: unknown;
           robot?: unknown;
           mazeVersion?: unknown;
@@ -2866,9 +2878,13 @@ export default function Home() {
         const restoredRobot = mazeLayoutMatches
           ? sanitizeRobot(savedSession.robot, MAZE_VARIANT)
           : INITIAL_ROBOT;
-        const restoredScreen = isScreen(savedSession.screen)
-          ? savedSession.screen
-          : 'access';
+        // Preserve an existing elevator session when inserting the new maze.
+        const savedScreen =
+          savedSession.sequenceVersion !== EXERCISE_SEQUENCE_VERSION &&
+          savedSession.screen === 'stage5'
+            ? 'stage6'
+            : savedSession.screen;
+        const restoredScreen = isScreen(savedScreen) ? savedScreen : 'access';
         const restoredBinaryVariant = isBinaryVariantId(
           savedSession.binaryVariant,
         )
@@ -2985,6 +3001,7 @@ export default function Home() {
         JSON.stringify({
           accessCode,
           screen,
+          sequenceVersion: EXERCISE_SEQUENCE_VERSION,
           program,
           robot,
           mazeVersion: MAZE_LAYOUT_VERSION,
@@ -3102,7 +3119,7 @@ export default function Home() {
       resetEnergyChallenge();
     }
 
-    if (stage === 'stage5') {
+    if (stage === 'stage6') {
       resetElevatorChallenge();
     }
 
@@ -3718,7 +3735,6 @@ export default function Home() {
           : { tone: 'error', message: 'Certaines cartes sont mal classées.' },
       );
       if (isCorrect) {
-        resetElevatorChallenge();
         setScreen('stage5');
       }
       return;
@@ -3782,17 +3798,25 @@ export default function Home() {
     });
   };
 
-  if (['challenge', 'stage5'].includes(screen)) {
+  if (['challenge', 'stage5', 'stage6'].includes(screen)) {
     return (
       <main className="stalk-shell scratch-page">
         <ScratchChallenge
           key={screen}
-          mode={screen === 'challenge' ? 'maze' : 'elevator'}
+          mode={screen === 'stage6' ? 'elevator' : 'maze'}
+          challenge={screen === 'stage5' ? 'maze-optimization' : undefined}
           onComplete={
-            screen === 'challenge' ? () => setScreen('stage3') : undefined
+            screen === 'challenge'
+              ? () => setScreen('stage3')
+              : screen === 'stage5'
+                ? () => {
+                    resetElevatorChallenge();
+                    setScreen('stage6');
+                  }
+                : undefined
           }
           panel={
-            screen === 'challenge' ? ScratchMazePanel : ScratchElevatorPanel
+            screen === 'stage6' ? ScratchElevatorPanel : ScratchMazePanel
           }
         />
       </main>
@@ -3857,7 +3881,7 @@ export default function Home() {
             onDragEnd={handleEnergyDragEnd}
           />
         )}
-        {screen === 'stage5' && (
+        {screen === 'stage6' && (
           <ElevatorChallengeScreen
             program={elevatorProgram}
             selectedLoopId={selectedElevatorLoopId}

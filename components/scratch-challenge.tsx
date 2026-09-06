@@ -9,6 +9,8 @@ type MazeSnapshot = {
   hasKey: boolean;
   completed: boolean;
   error: string;
+  blockCount?: number;
+  challengeFeedback?: string;
 };
 
 type ElevatorSnapshot = {
@@ -39,16 +41,21 @@ export type ScratchPanelProps = {
 
 export function ScratchChallenge({
   mode,
+  challenge,
   onComplete,
   panel: Panel,
 }: {
   mode: 'maze' | 'elevator';
+  challenge?: 'maze-optimization';
   onComplete?: () => void;
   panel: ComponentType<ScratchPanelProps>;
 }) {
   const frame = useRef<HTMLIFrameElement>(null);
   const [snapshot, setSnapshot] = useState<PanelSnapshot | null>(null);
   const [ready, setReady] = useState(false);
+  const isOptimization = mode === 'maze' && challenge === 'maze-optimization';
+  const mazeState = snapshot?.mode === 'maze' ? snapshot.state : null;
+  const feedback = snapshot?.state.error || mazeState?.challengeFeedback;
 
   const send = (type: 'sync' | 'call' | 'destination', floor?: number) => {
     frame.current?.contentWindow?.postMessage(
@@ -84,32 +91,46 @@ export function ScratchChallenge({
       <link rel="stylesheet" href="./scratch/embed.css" precedence="default" />
       <section className="terminal-panel scratch-panel">
         <div className="scratch-heading">
-          <h2>
-            {mode === 'maze'
-              ? 'Construisez le trajet'
-              : 'Programmez l’ascenseur'}
-          </h2>
+          <div className="scratch-heading-row">
+            <h2>
+              {isOptimization
+                ? 'Optimisez le trajet'
+                : mode === 'maze'
+                  ? 'Construisez le trajet'
+                  : 'Programmez l’ascenseur'}
+            </h2>
+            {isOptimization && (
+              <output className="scratch-block-count" aria-live="polite">
+                {mazeState?.blockCount ?? '—'} / 10 blocs
+              </output>
+            )}
+          </div>
           {mode === 'maze' && (
             <p>
-              Construisez le programme de haut en bas. Utilisez une boucle pour
-              compresser les répétitions et un bloc SI pour réagir à la carte.
+              {isOptimization
+                ? 'Récupérez la clé et atteignez la porte en 10 blocs maximum, drapeau et capteurs compris.'
+                : 'Construisez le programme de haut en bas. Utilisez une boucle pour compresser les répétitions et un bloc SI pour réagir à la carte.'}
             </p>
           )}
         </div>
         <iframe
           ref={frame}
           className="scratch-challenge-frame"
-          src={`./scratch/runtime.html?mode=${mode}&embedded=1`}
+          src={`./scratch/runtime.html?mode=${mode}&embedded=1${isOptimization ? '&challenge=maze-optimization' : ''}`}
           title={
-            mode === 'maze' ? 'Scratch — Labyrinthe' : 'Scratch — Ascenseur'
+            isOptimization
+              ? 'Scratch — Épreuve 5 : labyrinthe en 10 blocs'
+              : mode === 'maze'
+                ? 'Scratch — Labyrinthe'
+                : 'Scratch — Ascenseur'
           }
           onLoad={() => send('sync')}
           allow="autoplay; fullscreen"
           allowFullScreen
         />
-        {snapshot?.state.error && (
+        {feedback && (
           <output className="run-feedback feedback-error scratch-feedback">
-            {snapshot.state.error}
+            {feedback}
           </output>
         )}
       </section>

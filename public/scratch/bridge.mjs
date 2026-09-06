@@ -1,6 +1,12 @@
 // The iframe owns the VM; the surrounding site only displays its state and
 // forwards physical button presses. It never runs a second simulation.
-export function createLabBridge(host, mode, getExtension, isReady) {
+export function createLabBridge(
+  host,
+  mode,
+  getExtension,
+  isReady,
+  getChallengeState = () => ({}),
+) {
   function notify(type, detail = {}) {
     if (host.parent === host) return;
     host.parent.postMessage(
@@ -17,6 +23,7 @@ export function createLabBridge(host, mode, getExtension, isReady) {
       state: {
         ...extension.simulation.state,
         motion: extension.motion ?? 'idle',
+        ...getChallengeState(),
       },
     });
   }

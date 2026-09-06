@@ -40,6 +40,20 @@ body.scratch-standalone {
   font-size: 1.75rem;
 }
 
+.scratch-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.scratch-block-count {
+  flex-shrink: 0;
+  color: #d9ff66;
+  font-size: 0.875rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .scratch-heading p {
   max-width: 620px;
   margin: 16px 0 0;
