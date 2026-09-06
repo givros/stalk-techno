@@ -1205,11 +1205,6 @@ function MazePanel({
         </div>
       </div>
 
-      <p className="mission-strip">
-        Avec un SI, ramassez la clé lorsque le robot est sur sa case, puis
-        atteignez la porte.
-      </p>
-
       <div className="maze-frame">
         <div className="maze-grid" aria-label="Grille du mini-labyrinthe">
           {maze.cells.map((cell) => {
