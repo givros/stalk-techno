@@ -80,7 +80,7 @@ function project(blocks, extensions = []) {
   };
 }
 
-async function createVm(context, mode) {
+async function createVm(context, mode, { autoStart = true } = {}) {
   const vm = new VirtualMachine();
   const storage = new ScratchStorage();
   createLocalAsset(
@@ -100,7 +100,7 @@ async function createVm(context, mode) {
     vm.quit();
   });
   await delay(0);
-  vm.start();
+  if (autoStart) vm.start();
   return { vm, extension };
 }
 
@@ -113,6 +113,11 @@ async function waitFor(predicate, timeout = 8000) {
     );
     await delay(20);
   }
+}
+
+function waitForScratchIdle(vm, extension) {
+  // An animation can finish before Scratch retires its event thread.
+  return waitFor(() => !extension.busy && vm.runtime.threads.length === 0);
 }
 
 function panelBridge(context, extension, mode, ready = () => true) {
@@ -631,9 +636,57 @@ test('official Scratch hall event opens doors, waits four seconds and closes the
   await waitFor(() => !extension.simulation.state.doorsOpen);
   assert.ok(Date.now() - openedAt >= 4000);
   assert.deepEqual(extension.simulation.state.served, [0]);
-  await waitFor(() => !extension.busy);
+  await waitForScratchIdle(vm, extension);
   extension.call({ FLOOR: 0 });
   await waitFor(() => extension.simulation.state.doorsOpen);
+  assert.deepEqual(extension.simulation.state.served, [0, 0]);
+});
+
+test('the idle barrier waits for Scratch to retire the previous hall event, not just finish its animation', async (context) => {
+  const { vm, extension } = await createVm(context, 'elevator', {
+    autoStart: false,
+  });
+  await vm.loadProject(
+    project(
+      {
+        call: block('stalkelevator_whenCalled', 'open'),
+        open: block('stalkelevator_open', 'close', {}, {}, 'call'),
+        close: block('stalkelevator_close', null, {}, {}, 'open'),
+      },
+      ['stalkelevator'],
+    ),
+  );
+  extension.call({ FLOOR: 0 });
+  const [thread] = vm.runtime.threads;
+
+  // Step the real VM manually to reproduce the CI timing window deterministically.
+  vm.runtime.sequencer.stepThread(thread);
+  await waitFor(() => !extension.busy);
+  assert.equal(extension.simulation.state.doorsOpen, true);
+  vm.runtime.sequencer.stepThread(thread);
+  await waitFor(() => !extension.busy);
+  assert.equal(extension.simulation.state.doorsOpen, false);
+  assert.equal(vm.runtime.threads.length, 1);
+  assert.deepEqual(vm.runtime.startHats('stalkelevator_whenCalled'), []);
+
+  let idle = false;
+  const finished = waitForScratchIdle(vm, extension).then(() => {
+    idle = true;
+  });
+  await delay(40);
+  assert.equal(
+    idle,
+    false,
+    'A finished animation is not a finished Scratch script',
+  );
+
+  vm.start();
+  await finished;
+  assert.equal(vm.runtime.threads.length, 0);
+  extension.call({ FLOOR: 0 });
+  await waitFor(() => extension.simulation.state.doorsOpen);
+  assert.deepEqual(extension.simulation.state.served, [0, 0]);
+  assert.equal(extension.simulation.state.error, '');
 });
 
 test('Scratch stop cancels pending simulator actions; maze supports native repeat', async (context) => {

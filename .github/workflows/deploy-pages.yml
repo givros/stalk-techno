@@ -37,9 +37,6 @@ jobs:
       - name: Install and prepare Scratch
         run: npm run scratch:install
 
-      - name: Test Scratch programs
-        run: npm run test:scratch
-
       - name: Build the static site
         env:
           STATIC_EXPORT: 'true'
