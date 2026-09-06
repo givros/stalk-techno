@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scratch — STALK Techno</title>
+    <link rel="icon" href="../favicon.svg" />
+    <link rel="stylesheet" href="./editor.css" />
+  </head>
+  <body>
+    <div id="scratch-editor"></div>
+    <div id="scratch-loading" role="status">Chargement de Scratch…</div>
+    <script>
+      window.STALK_SCRATCH_ASSET_BASE = new URL(
+        './vendor/',
+        location.href,
+      ).href;
+    </script>
+    <script src="./vendor/scratch-gui-standalone.js"></script>
+    <script type="module" src="./editor.mjs"></script>
+  </body>
+</html>

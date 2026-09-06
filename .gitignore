@@ -1,5 +1,7 @@
 # dependencies
 /node_modules
+/scratch/node_modules/
+/public/scratch/vendor/
 /.pnp
 .pnp.*
 .yarn/*
@@ -35,6 +37,7 @@ next-env.d.ts
 /dist/
 /.wrangler/
 /outputs/
+/output/playwright/
 /work/
 
 # local generated QA files

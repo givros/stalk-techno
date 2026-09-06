@@ -4,6 +4,8 @@
   "printWidth": 80,
   "sortPackageJson": false,
   "ignorePatterns": [
+    "scratch/node_modules/**",
+    "public/scratch/vendor/**",
     "package-lock.json",
     "pnpm-lock.yaml",
     "yarn.lock",

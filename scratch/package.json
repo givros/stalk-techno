@@ -1,0 +1,12 @@
+{
+  "name": "stalk-scratch-runtime",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "@scratch/scratch-gui-standalone": "15.1.1",
+    "@scratch/scratch-vm": "15.1.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "redux": "4.2.1"
+  }
+}

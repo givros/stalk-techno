@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Scratch — STALK Techno</title>
+    <link rel="icon" href="../favicon.svg" />
+    <link rel="stylesheet" href="./embed.css" />
+  </head>
+  <body class="scratch-standalone">
+    <main class="scratch-page">
+      <section class="scratch-panel">
+        <iframe
+          id="scratch-frame"
+          class="scratch-challenge-frame"
+          title="Scratch"
+          allow="autoplay; fullscreen"
+          allowfullscreen
+        ></iframe>
+      </section>
+    </main>
+    <script type="module">
+      const requestedMode = new URLSearchParams(location.search).get('mode');
+      const mode = ['maze', 'elevator'].includes(requestedMode)
+        ? requestedMode
+        : 'free';
+      const frame = document.getElementById('scratch-frame');
+      frame.title = {
+        maze: 'Scratch — Labyrinthe',
+        elevator: 'Scratch — Ascenseur',
+        free: 'Scratch',
+      }[mode];
+      frame.src = `./runtime.html?mode=${mode}`;
+    </script>
+  </body>
+</html>

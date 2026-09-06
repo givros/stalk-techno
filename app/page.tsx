@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Bell,
   Bot,
   Check,
   ChevronDown,
@@ -25,6 +26,16 @@ import {
 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  mazeDirectionLabel as directionLabel,
+  mazeDirectionRotation,
+  scratchDirectionToMaze,
+  type MazeDirection as Direction,
+} from '@/lib/maze-orientation';
+import {
+  ScratchChallenge,
+  type ScratchPanelProps,
+} from '@/components/scratch-challenge';
 import {
   InputOTP,
   InputOTPGroup,
@@ -47,7 +58,6 @@ type ConditionKind =
   | 'near-exit'
   | 'has-key';
 type BlockKind = CommandKind | 'repeat' | 'if';
-type Direction = 0 | 1 | 2 | 3;
 type CollectibleKind = 'key' | 'battery' | 'signal' | 'module';
 type EnergyCategory = 'renewable' | 'nonrenewable';
 type ElevatorAction =
@@ -448,13 +458,6 @@ const collectibleLabel: Record<CollectibleKind, string> = {
   battery: 'batterie',
   signal: 'balise',
   module: 'module',
-};
-
-const directionLabel: Record<Direction, string> = {
-  0: 'est',
-  1: 'sud',
-  2: 'ouest',
-  3: 'nord',
 };
 
 const elevatorActionLabel: Record<ElevatorActionKind, string> = {
@@ -1174,7 +1177,18 @@ function TeacherBypassScreen({
   );
 }
 
-function MazePanel({ maze, robot }: { maze: MazeVariant; robot: RobotState }) {
+function MazePanel({
+  maze,
+  robot,
+}: {
+  maze: MazeVariant;
+  robot: Pick<RobotState, 'row' | 'col' | 'direction' | 'collected'> & {
+    visited?: string[];
+  };
+}) {
+  const facingRotation = mazeDirectionRotation(robot.direction);
+  const facingLabel = directionLabel[robot.direction];
+
   return (
     <section className="terminal-panel maze-panel" aria-labelledby="maze-title">
       <div className="maze-heading">
@@ -1182,13 +1196,18 @@ function MazePanel({ maze, robot }: { maze: MazeVariant; robot: RobotState }) {
           <h2 id="maze-title">{maze.name}</h2>
         </div>
         <div className="direction-readout" aria-live="polite">
-          <ArrowUp aria-hidden="true" />
-          <span>{directionLabel[robot.direction]}</span>
+          <ArrowUp
+            aria-hidden="true"
+            strokeWidth={3}
+            style={{ transform: `rotate(${facingRotation}deg)` }}
+          />
+          <span>{facingLabel}</span>
         </div>
       </div>
 
       <p className="mission-strip">
-        Récupérez la clé, puis atteignez la porte.
+        Avec un SI, ramassez la clé lorsque le robot est sur sa case, puis
+        atteignez la porte.
       </p>
 
       <div className="maze-frame">
@@ -1198,7 +1217,7 @@ function MazePanel({ maze, robot }: { maze: MazeVariant; robot: RobotState }) {
             const row = Number(rowText);
             const col = Number(colText);
             const isRobot = robot.row === row && robot.col === col;
-            const isVisited = robot.visited.includes(cell.id);
+            const isVisited = robot.visited?.includes(cell.id);
             const isCollected =
               cell.kind === 'item' &&
               Boolean(cell.value && robot.collected.includes(cell.value));
@@ -1239,13 +1258,20 @@ function MazePanel({ maze, robot }: { maze: MazeVariant; robot: RobotState }) {
                   </span>
                 )}
                 {isRobot && (
-                  <span
+                  <figure
                     className="robot-marker"
-                    aria-label={`Robot, direction ${directionLabel[robot.direction]}`}
-                    style={{ transform: `rotate(${robot.direction * 90}deg)` }}
+                    title={`Robot, direction ${facingLabel}`}
                   >
                     <Bot aria-hidden="true" />
-                  </span>
+                    <span
+                      className="robot-heading"
+                      aria-hidden="true"
+                      style={{ transform: `rotate(${facingRotation}deg)` }}
+                    />
+                    <figcaption className="sr-only">
+                      Robot, direction {facingLabel}
+                    </figcaption>
+                  </figure>
                 )}
               </div>
             );
@@ -2503,8 +2529,10 @@ function ElevatorVisualPanel({
   requests,
   served,
   motion,
+  callPending,
   solved,
   isRunning,
+  onCallElevator,
   onFloorPress,
 }: {
   floor: number;
@@ -2513,8 +2541,10 @@ function ElevatorVisualPanel({
   requests: number[];
   served: number[];
   motion: ElevatorMotion;
+  callPending: boolean;
   solved: boolean;
   isRunning: boolean;
+  onCallElevator: () => void;
   onFloorPress: (floor: number) => void;
 }) {
   return (
@@ -2574,7 +2604,27 @@ function ElevatorVisualPanel({
       </div>
 
       <div className="elevator-call-panel">
-        <div className="palette-label">APPELS</div>
+        <div className="elevator-call-control">
+          <div>
+            <div className="palette-label">APPEL</div>
+            <span className="elevator-call-status">
+              {callPending ? 'APPEL EN ATTENTE' : 'AU REZ-DE-CHAUSSÉE'}
+            </span>
+          </div>
+          <button
+            type="button"
+            className={`elevator-call-button ${callPending ? 'is-pending' : ''}`}
+            onClick={onCallElevator}
+            disabled={isRunning || solved || callPending}
+          >
+            <Bell aria-hidden="true" />
+            {callPending ? 'APPEL ENREGISTRÉ' : 'APPELER'}
+          </button>
+        </div>
+
+        <div className="palette-label elevator-destination-label">
+          DESTINATIONS
+        </div>
         <div className="elevator-floor-buttons">
           {ELEVATOR_FLOORS.map((requestedFloor) => {
             const isPending =
@@ -2590,7 +2640,7 @@ function ElevatorVisualPanel({
                 onClick={() => onFloorPress(requestedFloor)}
                 disabled={isRunning || solved}
                 aria-pressed={isPending}
-                aria-label={`Appeler l'étage ${requestedFloor}`}
+                aria-label={`Choisir l'étage ${requestedFloor}`}
               >
                 {requestedFloor}
               </button>
@@ -2620,6 +2670,7 @@ function ElevatorChallengeScreen({
   requests,
   served,
   motion,
+  callPending,
   feedback,
   solved,
   isRunning,
@@ -2630,6 +2681,7 @@ function ElevatorChallengeScreen({
   onMove,
   onExecute,
   onReset,
+  onCallElevator,
   onFloorPress,
 }: {
   program: ElevatorInstruction[];
@@ -2640,6 +2692,7 @@ function ElevatorChallengeScreen({
   requests: number[];
   served: number[];
   motion: ElevatorMotion;
+  callPending: boolean;
   feedback: Feedback;
   solved: boolean;
   isRunning: boolean;
@@ -2650,15 +2703,16 @@ function ElevatorChallengeScreen({
   onMove: (id: string, offset: -1 | 1) => void;
   onExecute: () => void;
   onReset: () => void;
+  onCallElevator: () => void;
   onFloorPress: (floor: number) => void;
 }) {
   return (
     <section
       className="elevator-layout"
-      aria-label="Épreuve 5 : programmation de l'ascenseur"
+      aria-label="Épreuve 5 : programmation de l’ascenseur"
     >
       <div className="elevator-mission-strip">
-        Appuyez sur 7, puis 3, puis 5. Programmez l’ouverture, la fermeture et
+        Appelez l’ascenseur, choisissez 7, 3 et 5, puis programmez les portes et
         les déplacements.
       </div>
       <div className="elevator-grid">
@@ -2684,10 +2738,48 @@ function ElevatorChallengeScreen({
           motion={motion}
           solved={solved}
           isRunning={isRunning}
+          callPending={callPending}
+          onCallElevator={onCallElevator}
           onFloorPress={onFloorPress}
         />
       </div>
     </section>
+  );
+}
+
+function ScratchMazePanel({ snapshot }: ScratchPanelProps) {
+  const state = snapshot?.mode === 'maze' ? snapshot.state : null;
+  return (
+    <MazePanel
+      maze={MAZE_VARIANT}
+      robot={{
+        row: state?.row ?? 6,
+        col: state?.col ?? 1,
+        direction: scratchDirectionToMaze(state?.direction ?? 1),
+        collected: state?.hasKey ? ['key'] : [],
+      }}
+    />
+  );
+}
+
+function ScratchElevatorPanel({ snapshot, controls }: ScratchPanelProps) {
+  const state = snapshot?.mode === 'elevator' ? snapshot.state : null;
+  return (
+    <ElevatorVisualPanel
+      floor={state?.floor ?? 0}
+      doorsOpen={state?.doorsOpen ?? false}
+      target={state?.target ?? null}
+      requests={[
+        ...new Set([...(state?.calls ?? []), ...(state?.destinations ?? [])]),
+      ]}
+      served={state?.served ?? []}
+      motion={state?.motion ?? 'idle'}
+      callPending={state?.calls.includes(0) ?? false}
+      solved={false}
+      isRunning={!controls.ready}
+      onCallElevator={() => controls.call(0)}
+      onFloorPress={controls.destination}
+    />
   );
 }
 
@@ -2724,6 +2816,7 @@ export default function Home() {
   const [elevatorRequests, setElevatorRequests] = useState<number[]>([]);
   const [elevatorServed, setElevatorServed] = useState<number[]>([]);
   const [elevatorMotion, setElevatorMotion] = useState<ElevatorMotion>('idle');
+  const [elevatorCallPending, setElevatorCallPending] = useState(false);
   const [elevatorFeedback, setElevatorFeedback] = useState<Feedback>(
     INITIAL_ELEVATOR_FEEDBACK,
   );
@@ -2763,6 +2856,7 @@ export default function Home() {
           elevatorTarget?: unknown;
           elevatorRequests?: unknown;
           elevatorServed?: unknown;
+          elevatorCallPending?: unknown;
           elevatorSolved?: unknown;
         };
         const restoredCode =
@@ -2801,6 +2895,10 @@ export default function Home() {
         const restoredElevatorServed = sanitizeElevatorFloors(
           savedSession.elevatorServed,
         );
+        const restoredElevatorCallPending =
+          typeof savedSession.elevatorCallPending === 'boolean'
+            ? savedSession.elevatorCallPending
+            : restoredElevatorRequests.length > 0;
         const restoredElevatorFloor =
           typeof savedSession.elevatorFloor === 'number' &&
           Number.isInteger(savedSession.elevatorFloor) &&
@@ -2831,6 +2929,7 @@ export default function Home() {
         setElevatorProgram(restoredElevatorProgram);
         setElevatorFloor(restoredElevatorFloor);
         const hasElevatorProgress =
+          restoredElevatorCallPending ||
           restoredElevatorRequests.length > 0 ||
           restoredElevatorServed.length > 0 ||
           restoredElevatorFloor !== 0 ||
@@ -2845,6 +2944,7 @@ export default function Home() {
         setElevatorTarget(restoredElevatorTarget);
         setElevatorRequests(restoredElevatorRequests);
         setElevatorServed(restoredElevatorServed);
+        setElevatorCallPending(restoredElevatorCallPending);
         setElevatorSolved(Boolean(savedSession.elevatorSolved));
         setScreen(
           hasValidAccess && restoredScreen !== 'access'
@@ -2904,6 +3004,7 @@ export default function Home() {
           elevatorTarget,
           elevatorRequests,
           elevatorServed,
+          elevatorCallPending,
           elevatorSolved,
         }),
       );
@@ -2920,6 +3021,7 @@ export default function Home() {
     elevatorDoorsOpen,
     elevatorFloor,
     elevatorProgram,
+    elevatorCallPending,
     elevatorRequests,
     elevatorServed,
     elevatorSolved,
@@ -2981,6 +3083,7 @@ export default function Home() {
     setElevatorRequests([]);
     setElevatorServed([]);
     setElevatorMotion('idle');
+    setElevatorCallPending(false);
     setElevatorFeedback(INITIAL_ELEVATOR_FEEDBACK);
     setElevatorSolved(false);
     setIsElevatorRunning(false);
@@ -3188,6 +3291,12 @@ export default function Home() {
     setElevatorFeedback(INITIAL_ELEVATOR_FEEDBACK);
   };
 
+  const callElevator = () => {
+    if (isElevatorRunning || elevatorSolved || elevatorCallPending) return;
+    setElevatorCallPending(true);
+    setElevatorFeedback(INITIAL_ELEVATOR_FEEDBACK);
+  };
+
   const executeElevatorProgram = () => {
     if (isElevatorRunning || elevatorSolved) return;
 
@@ -3216,6 +3325,8 @@ export default function Home() {
     let cursor = 0;
     let openedByProgram = false;
     let closedByProgram = false;
+    let pickupPending = elevatorCallPending;
+    let autoCloseAt: number | null = null;
 
     const publishElevator = (runtime: ElevatorRuntime) => {
       setElevatorFloor(runtime.floor);
@@ -3259,32 +3370,55 @@ export default function Home() {
       }
 
       if (action === 'open-doors') {
-        if (next.requests.length === 0) return { next };
-        if (next.target === null && next.doorsOpen) return { next };
-        if (next.target !== next.floor || !next.requests.includes(next.floor)) {
+        if (next.doorsOpen) return { next };
+
+        const isInitialArrival = pickupPending && next.floor === 0;
+        const isDestinationArrival =
+          next.target !== null &&
+          next.target === next.floor &&
+          next.requests.includes(next.floor);
+
+        if (!isInitialArrival && !isDestinationArrival) {
           return {
             next,
-            error: 'Les portes ne peuvent s’ouvrir qu’à l’arrêt demandé.',
+            error: pickupPending
+              ? 'Appelez l’ascenseur avant d’ouvrir les portes.'
+              : 'Les portes ne peuvent s’ouvrir qu’à l’arrêt demandé.',
           };
         }
+
         next.doorsOpen = true;
+        next.motion = 'idle';
+        openedByProgram = true;
+
+        if (isInitialArrival) {
+          pickupPending = false;
+          setElevatorCallPending(false);
+          return { next };
+        }
+
         next.requests = next.requests.filter(
           (requestedFloor) => requestedFloor !== next.floor,
         );
         next.served.push(next.floor);
         next.target = null;
-        next.motion = 'idle';
-        openedByProgram = true;
+        autoCloseAt = Date.now() + 4000;
         return { next };
       }
 
       if (action === 'close-doors') {
         next.doorsOpen = false;
         closedByProgram = true;
+        autoCloseAt = null;
         return { next };
       }
 
       if (next.target === null || next.requests.length === 0) return { next };
+      if (pickupPending)
+        return {
+          next,
+          error: 'Les portes doivent s’ouvrir avant le départ.',
+        };
       if (next.doorsOpen)
         return {
           next,
@@ -3321,9 +3455,26 @@ export default function Home() {
     const tickElevator = () => {
       if (elevatorRunId.current !== currentRun) return;
 
+      if (autoCloseAt !== null) {
+        const remaining = autoCloseAt - Date.now();
+        if (remaining > 0) {
+          elevatorTimer.current = window.setTimeout(
+            tickElevator,
+            Math.min(remaining, 330),
+          );
+          return;
+        }
+
+        autoCloseAt = null;
+        current = { ...current, doorsOpen: false, motion: 'idle' };
+        closedByProgram = true;
+        publishElevator(current);
+      }
+
       if (cursor >= steps.length) {
         const expectedOrder = [...initialRequests].sort((a, b) => a - b);
         const correctOrder =
+          expectedOrder.length > 0 &&
           current.requests.length === 0 &&
           current.target === null &&
           current.served.length === expectedOrder.length &&
@@ -3332,7 +3483,11 @@ export default function Home() {
           );
 
         if (correctOrder && openedByProgram && closedByProgram) {
-          finishElevator(current, true, 'Ascenseur opérationnel.');
+          finishElevator(
+            current,
+            true,
+            'Ascenseur opérationnel. En attente d’une nouvelle demande.',
+          );
         } else if (current.requests.length > 0) {
           finishElevator(current, false, 'Il reste des étages à desservir.');
         } else if (!correctOrder) {
@@ -3632,6 +3787,23 @@ export default function Home() {
     });
   };
 
+  if (['challenge', 'stage5'].includes(screen)) {
+    return (
+      <main className="stalk-shell scratch-page">
+        <ScratchChallenge
+          key={screen}
+          mode={screen === 'challenge' ? 'maze' : 'elevator'}
+          onComplete={
+            screen === 'challenge' ? () => setScreen('stage3') : undefined
+          }
+          panel={
+            screen === 'challenge' ? ScratchMazePanel : ScratchElevatorPanel
+          }
+        />
+      </main>
+    );
+  }
+
   return (
     <main className="stalk-shell">
       <div className="main-content">
@@ -3700,6 +3872,7 @@ export default function Home() {
             requests={elevatorRequests}
             served={elevatorServed}
             motion={elevatorMotion}
+            callPending={elevatorCallPending}
             feedback={elevatorFeedback}
             solved={elevatorSolved}
             isRunning={isElevatorRunning}
@@ -3710,6 +3883,7 @@ export default function Home() {
             onMove={moveElevatorInstruction}
             onExecute={executeElevatorProgram}
             onReset={resetElevatorChallenge}
+            onCallElevator={callElevator}
             onFloorPress={pressElevatorFloor}
           />
         )}

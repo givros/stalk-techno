@@ -23,6 +23,8 @@
     "typeCheck": true
   },
   "ignorePatterns": [
+    "scratch/node_modules/**",
+    "public/scratch/vendor/**",
     ".next/**",
     ".vinext/**",
     "out/**",

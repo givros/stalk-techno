@@ -6,7 +6,12 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "scratch:install": "npm ci --prefix scratch --no-audit --no-fund && node scripts/prepare-scratch.mjs",
+    "scratch:prepare": "node scripts/prepare-scratch.mjs",
+    "test:scratch": "node --experimental-strip-types --test tests/scratch.test.mjs tests/maze-orientation.test.mjs",
+    "predev": "npm run scratch:prepare",
     "dev": "vinext dev",
+    "prebuild": "npm run scratch:prepare",
     "build": "vinext build",
     "start": "wrangler dev --config dist/server/wrangler.json",
     "lint": "oxlint",

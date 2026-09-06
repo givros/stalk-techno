@@ -1,0 +1,86 @@
+body.scratch-standalone {
+  margin: 0;
+  background: #080b10;
+}
+
+.scratch-page {
+  box-sizing: border-box;
+  height: 100dvh;
+  padding: 16px;
+  background: #080b10;
+}
+
+.scratch-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(340px, 27vw, 440px);
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+
+.scratch-panel {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  padding: 12px;
+  border: 1px solid rgba(159, 188, 204, 0.24);
+  background: #0d141c;
+}
+
+.scratch-heading {
+  flex: 0 0 auto;
+  padding: 12px 12px 18px;
+}
+
+.scratch-heading h2 {
+  margin: 0;
+  font-size: 1.75rem;
+}
+
+.scratch-heading p {
+  max-width: 620px;
+  margin: 16px 0 0;
+  color: #b0bdc4;
+  font-size: 0.82rem;
+  line-height: 1.5;
+}
+
+.scratch-challenge-frame {
+  display: block;
+  flex: 1 1 0;
+  width: 100%;
+  min-height: 0;
+  border: 0;
+  background: #e5f0ff;
+}
+
+.scratch-side-panel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+
+.scratch-side-panel .maze-panel,
+.scratch-side-panel .elevator-visual-panel {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
+
+.scratch-side-panel .maze-frame {
+  min-height: 0;
+  padding: 18px;
+}
+
+.scratch-side-panel .elevator-visual {
+  flex-shrink: 0;
+  width: min(100%, 260px);
+}
+
+.scratch-feedback {
+  flex: 0 0 auto;
+  margin: 10px 0 0;
+}

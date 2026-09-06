@@ -1,0 +1,55 @@
+html,
+body,
+#scratch-editor {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+body {
+  font-family: Arial, sans-serif;
+}
+#scratch-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: grid;
+  place-content: center;
+  padding: 30px;
+  background: #e5f0ff;
+  color: #333;
+  font-size: 16px;
+  text-align: center;
+}
+#scratch-loading[hidden] {
+  display: none;
+}
+
+/* Keep Scratch's native flag and stop controls above the full-width workspace.
+   The exercise scene is displayed by the site's existing adjacent panel. */
+.lab-embedded [class*='gui_flex-wrapper'] {
+  position: relative;
+}
+
+.lab-embedded [class*='gui_editor-wrapper'] {
+  flex-basis: 0;
+  min-width: 0;
+}
+
+.lab-embedded [class*='gui_stage-and-target-wrapper'] {
+  position: absolute;
+  top: 0;
+  right: 8px;
+  z-index: 6;
+  padding: 0;
+}
+
+.lab-embedded [class*='gui_target-wrapper'],
+.lab-embedded [class*='stage-wrapper_stage-canvas-wrapper'],
+.lab-embedded [class*='stage-header_stage-size-row'] {
+  display: none;
+}
+
+.lab-embedded [class*='stage-header_stage-menu-wrapper'] {
+  width: auto !important;
+}
